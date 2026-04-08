@@ -41,7 +41,7 @@ If `-o` is not specified, predictions will be written to a CSV file with an auto
 ### Supported Input Format
 MultiMHC takes **CSV** file as input with required columns **"peptide"** and **"HLA"**.
 
-- Only MHC class I alleles in the standard format (e.g., `HLA-A*01:01`) are supported.
+- Only MHC class I alleles in the standard format (e.g., `HLA-A*01:01` or `HLA-A01:01`) are supported.
 - Only peptides of length **8–11** are supported, and peptides outside this length range will be filtered out before prediction.
 
 See `demo.csv` for more details
