@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from models_clean import Fusion_PL
+from models import Fusion_PL
 from utils import Fusion_datamodule, hla_dic, re_hla, build_parser, resolve_device
 import json
 import time
