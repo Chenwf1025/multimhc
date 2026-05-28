@@ -1,11 +1,9 @@
-import argparse
 import torch
 import numpy as np
 import pandas as pd
-from models import Fusion_PL
+from models_clean import Fusion_PL
 from utils import Fusion_datamodule, hla_dic, re_hla, build_parser, resolve_device
-import yaml
-import sys
+import json
 import time
 import logging
 import random
@@ -14,6 +12,7 @@ from pathlib import Path
 from pytorch_lightning import Trainer
 from copy import deepcopy
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -22,7 +21,7 @@ script_path = Path(__file__).parent.absolute()
 
 def seed_torch(seed=3407):
     random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -32,18 +31,18 @@ def seed_torch(seed=3407):
 
 
 def process_data(df):
-    df['length'] = df['peptide'].map(lambda x: len(x))
-    cond = df['length'].isin([8, 9, 10, 11])
+    df["length"] = df["peptide"].map(lambda x: len(x))
+    cond = df["length"].isin([8, 9, 10, 11])
     df = df[cond]
     seqs = []
-    for pep, hla in zip(df['peptide'], df['HLA']):
+    for pep, hla in zip(df["peptide"], df["HLA"]):
+        if re_hla.match(hla):
+            hla = "*".join(re_hla.match(hla).groups())
         if hla not in hla_dic.keys():
-            logging.warning(f'{hla} is not in the training data.')
+            logging.warning(f"{hla} is not in the training data.")
             continue
         diff_len = 11 - len(pep)
-        pep += diff_len*'X'
-        if re_hla.match(hla):
-            hla = '*'.join(re_hla.match(hla).groups())
+        pep += diff_len * "X"
         hla_seq = hla_dic[hla]
         seq = pep.strip() + hla_seq.strip()
         seqs.append(seq)
@@ -57,39 +56,44 @@ def predict(args):
     output_df = deepcopy(input_df)
     seqs = process_data(input_df)
     if use_cuda:
-        accelerator = 'gpu'
-        devices=[0]
+        accelerator = "gpu"
+        devices = [0]
     else:
-        accelerator = 'cpu'
-        devices=None
-    trainer = Trainer(accelerator=accelerator, devices=devices,
-                      enable_progress_bar=False,
-                      logger=False)
+        accelerator = "cpu"
+        devices = None
+    trainer = Trainer(
+        accelerator=accelerator,
+        devices=devices,
+        enable_progress_bar=False,
+        logger=False,
+    )
     fold_prob_ls = []
     bsz = 256
+    config_f = Path.joinpath(script_path, "models/config.json")
+    with open(config_f) as f:
+        config = json.load(f)
     for fold_idx in range(1, 6):
         datamod = Fusion_datamodule(batch_size=bsz, seqs=seqs)
         datamod.prepare_data()
         test_loader = datamod.val_dataloader()
-        hparam_f = Path.joinpath(script_path, 'models/hparams.yaml')
-        with open(hparam_f) as f:
-            config = yaml.load(f, Loader=yaml.FullLoader)
-        model = Fusion_PL(config=config, device=device)
-        ckpt_file = Path.joinpath(
-            script_path, f'models/model_fold{fold_idx}.ckpt')
-        test_results = trainer.predict(model, dataloaders=test_loader, ckpt_path=ckpt_file)
+        model = Fusion_PL(config=config, total_steps=1, device=device)
+        ckpt_file = Path.joinpath(script_path, f"models/model_fold{fold_idx}.ckpt")
+        test_results = trainer.predict(
+            model, dataloaders=test_loader, ckpt_path=ckpt_file
+        )
         fold_prob_ls.append(torch.cat(test_results, dim=0).numpy())
 
     probs = np.mean(fold_prob_ls, axis=0)
-    output_df['Prediction Score'] = probs
+    output_df["Prediction Score"] = probs
     if not args.output:
         now = time.strftime("%Y%m%d-%H_%M_%S", time.localtime(time.time()))
-        output_file = f'{now}_predictions.csv'
+        output_file = f"{now}_predictions.csv"
         logging.warning(
-            f'Output file is not specified, the results will be saved in {output_file}')
+            f"Output file is not specified, the results will be saved in {output_file}"
+        )
     else:
         output_file = args.output
-    output_df.to_csv(output_file, index=False, float_format='%.6f')
+    output_df.to_csv(output_file, index=False, float_format="%.6f")
     return output_df
 
 
@@ -99,6 +103,6 @@ def main():
     predict(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     seed_torch()
     main()
