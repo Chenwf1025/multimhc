@@ -1,6 +1,6 @@
 # MultiMHC
 
-MultiMHC is a dual-pathway deep learning framework for peptide–major histocompatibility complex (pMHC) binding prediction that integrates complementary sequential and structural representations.
+MultiMHC is a dual-pathway deep learning framework for peptide–major histocompatibility complex (pMHC) binding prediction that integrates complementary sequential context and contact-topology representations.
 
 ![MultiMHC architecture](Fig1.jpg)
 
